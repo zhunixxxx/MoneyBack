@@ -38,22 +38,39 @@ function matchPatterns(normalized: string, patterns: RegExp[]): number | null {
   return null;
 }
 
+/** 查找「（小写）」后的阿拉伯数字金额 */
+function extractLowercaseLabelAmount(normalized: string): number | null {
+  const patterns: RegExp[] = [
+    /[(（]\s*小\s*写\s*[)）]\s*[：:]?\s*[¥￥]?\s*([\d,]+(?:\.\d{1,2})?)/g,
+    /(?<![价税合])小\s*写\s*[：:]\s*[¥￥]?\s*([\d,]+(?:\.\d{1,2})?)/g,
+  ];
+
+  for (const pattern of patterns) {
+    const matches = [...normalized.matchAll(pattern)];
+    if (matches.length === 0) continue;
+
+    const amount = parseAmount(matches[matches.length - 1][1]);
+    if (amount !== null) return amount;
+  }
+
+  return null;
+}
+
 /** 价税合计行中「（小写）」后的阿拉伯数字金额 */
 function extractTotalTaxLowercaseAmount(normalized: string): number | null {
+  const fromLabel = extractLowercaseLabelAmount(normalized);
+  if (fromLabel !== null) return fromLabel;
+
   const taxTotalIdx = normalized.search(/价\s*税\s*合\s*计/);
   if (taxTotalIdx < 0) return null;
 
-  const afterTaxTotal = normalized.slice(taxTotalIdx);
+  const aroundTaxTotal = normalized.slice(Math.max(0, taxTotalIdx - 300), taxTotalIdx + 500);
 
-  const lowerLabelMatch = afterTaxTotal.match(/[(（]\s*小\s*写\s*[)）]|小\s*写/);
-  if (lowerLabelMatch && lowerLabelMatch.index !== undefined) {
-    const afterLower = afterTaxTotal.slice(lowerLabelMatch.index + lowerLabelMatch[0].length);
-    const fromLabel = extractCurrencyAmountAfter(afterLower);
-    if (fromLabel !== null) return fromLabel;
-  }
+  const lowerInContext = extractLowercaseLabelAmount(aroundTaxTotal);
+  if (lowerInContext !== null) return lowerInContext;
 
   // 「（小写）」与金额分行时，大写汉字金额后通常紧跟 ¥ 小写金额
-  const upperThenAmount = afterTaxTotal.match(
+  const upperThenAmount = aroundTaxTotal.match(
     /[壹贰叁肆伍陆柒捌玖拾佰仟万亿元角分整]+\s*[¥￥]\s*([\d,]+(?:\.\d{1,2})?)/
   );
   if (upperThenAmount) {
@@ -66,24 +83,8 @@ function extractTotalTaxLowercaseAmount(normalized: string): number | null {
     /价\s*税\s*合\s*计[^0-9]{0,120}[(（]?\s*小\s*写\s*[)）]?\s*[：:]?\s*[¥￥]?\s*([\d,]+(?:\.\d{1,2})?)/,
     /[(（]\s*小\s*写\s*[)）]\s*[：:]?\s*[¥￥]?\s*([\d,]+(?:\.\d{1,2})?)/,
   ];
-  const inline = matchPatterns(afterTaxTotal.slice(0, 500), inlinePatterns);
+  const inline = matchPatterns(aroundTaxTotal, inlinePatterns);
   if (inline !== null) return inline;
-
-  return null;
-}
-
-function extractCurrencyAmountAfter(text: string): number | null {
-  const withSymbol = text.match(/[¥￥]\s*([\d,]+(?:\.\d{1,2})?)/);
-  if (withSymbol) {
-    const amount = parseAmount(withSymbol[1]);
-    if (amount !== null) return amount;
-  }
-
-  const plain = text.match(/^\s*[：:]?\s*([\d,]+(?:\.\d{1,2})?)/);
-  if (plain) {
-    const amount = parseAmount(plain[1]);
-    if (amount !== null) return amount;
-  }
 
   return null;
 }
@@ -109,13 +110,6 @@ export function extractAmountFromText(
   const amount = extractTotalTaxLowercaseAmount(normalized);
   if (amount !== null) {
     return { amount };
-  }
-
-  const fallback = matchPatterns(normalized, [
-    /(?:^|[^税])合\s*计\s*[：:]?\s*[¥￥]?\s*([\d,]+(?:\.\d{1,2})?)/,
-  ]);
-  if (fallback !== null) {
-    return { amount: fallback, note: '未能识别价税合计小写，已使用合计行金额' };
   }
 
   return { amount: null, note: '未能从发票中识别价税合计（小写）金额' };
@@ -180,6 +174,14 @@ function pickInvoiceTotalFromCurrencyAmounts(amounts: number[]): number | null {
 /** 部分电子发票用自定义字体编码，文本层读不到金额，需解析 PDF 内容流 */
 export function extractAmountFromPdfStreams(buffer: Buffer): InvoiceAmountResult {
   const tjStrings = extractTjStringsFromPdfBuffer(buffer);
+  const joined = tjStrings.join(' ');
+  const normalized = normalizeText(joined);
+
+  const fromLowercase = extractLowercaseLabelAmount(normalized);
+  if (fromLowercase !== null) {
+    return { amount: fromLowercase, note: '从 PDF 内容流识别价税合计（小写）' };
+  }
+
   const currencyAmounts = parseCurrencyAmountsFromTjStrings(tjStrings);
   const total = pickInvoiceTotalFromCurrencyAmounts(currencyAmounts);
 

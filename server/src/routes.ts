@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import multer from 'multer';
 import {
@@ -141,7 +142,7 @@ router.post('/reimbursements', async (req, res) => {
 
   const settings = await getSettings();
   const dir = baseDirectory || settings.baseDirectory;
-  const id = crypto.randomUUID();
+  const id = randomUUID();
   const folderPath = await createWorkFolder(dir, id);
 
   const reimbursement: Reimbursement = {

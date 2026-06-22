@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { extractReceiptInfoFromReceipt } from './receiptExtract.js';
@@ -170,7 +171,7 @@ export async function saveFileToReimbursement(
   await fs.writeFile(fullPath, buffer);
 
   return {
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     category,
     subType,
     originalName,

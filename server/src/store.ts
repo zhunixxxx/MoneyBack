@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -25,7 +26,7 @@ async function loadData(): Promise<AppData> {
     const now = new Date().toISOString();
     const defaultTemplate: ReimbursementTemplate = {
       ...createDefaultTemplate(),
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       createdAt: now,
       updatedAt: now,
     };
@@ -73,7 +74,7 @@ export async function createTemplate(
   const now = new Date().toISOString();
   const template: ReimbursementTemplate = {
     ...input,
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     createdAt: now,
     updatedAt: now,
   };
