@@ -1,3 +1,5 @@
+import { extractTextFromImage, isImageExtension } from './imageOcr.js';
+
 export interface CheckInDateResult {
   checkInDate: string | null;
   note?: string;
@@ -130,23 +132,17 @@ async function extractReceiptInfoFromBuffer(
       };
     }
 
-    if (['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'].includes(ext)) {
-      const { createWorker } = await import('tesseract.js');
-      const worker = await createWorker('chi_sim');
-      try {
-        const { data } = await worker.recognize(buffer);
-        if (data.text.trim()) {
-          return extractReceiptInfoFromText(data.text);
-        }
-        return {
-          checkInDate: null,
-          amount: null,
-          checkInDateNote: '图片 OCR 未识别到文字',
-          amountNote: '图片 OCR 未识别到文字',
-        };
-      } finally {
-        await worker.terminate();
+    if (isImageExtension(ext)) {
+      const text = await extractTextFromImage(buffer);
+      if (text.trim()) {
+        return extractReceiptInfoFromText(text);
       }
+      return {
+        checkInDate: null,
+        amount: null,
+        checkInDateNote: '图片 OCR 未识别到文字',
+        amountNote: '图片 OCR 未识别到文字',
+      };
     }
 
     return {

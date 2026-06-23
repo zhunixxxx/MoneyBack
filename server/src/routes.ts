@@ -3,14 +3,19 @@ import { Router } from 'express';
 import multer from 'multer';
 import {
   addReimbursement,
+  addDiningInvoice,
   createTemplate,
+  deleteDiningInvoice,
   deleteReimbursement,
   deleteTemplate,
+  getDiningInvoice,
+  getDiningInvoices,
   getReimbursement,
   getReimbursements,
   getSettings,
   getTemplate,
   getTemplates,
+  updateDiningInvoice,
   updateReimbursement,
   updateSettings,
   updateTemplate,
@@ -27,10 +32,18 @@ import {
   resolveUploadOriginalName,
   saveFileToReimbursement,
 } from './files.js';
+import {
+  attachDiningInvoiceToReimbursement,
+  buildDiningInvoiceRepoPath,
+  deleteDiningInvoiceFile,
+  getDiningInvoiceFilePath,
+  saveDiningInvoiceToRepository,
+} from './diningInvoices.js';
+import { matchDiningInvoices } from './diningInvoiceMatch.js';
 import { extractInvoiceAmount } from './invoiceExtract.js';
 import { extractReceiptInfoFromReceipt } from './receiptExtract.js';
 import type { FileCategory, FileSubType, Reimbursement, ReimbursementStatus } from './types.js';
-import { REIMBURSEMENT_STATUSES, TIER1_CITIES } from './types.js';
+import { getDailyDiningTotal, REIMBURSEMENT_STATUSES, TIER1_CITIES } from './types.js';
 
 const upload = multer({ storage: multer.memoryStorage() });
 export const router = Router();
@@ -400,4 +413,245 @@ router.post('/reimbursements/:id/open-folder', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: '无法打开文件夹', detail: String(err) });
   }
+});
+
+router.get('/dining-invoices', async (req, res) => {
+  const status = req.query.status;
+  let invoices = await getDiningInvoices();
+  if (status === 'available' || status === 'used') {
+    invoices = invoices.filter((inv) => inv.status === status);
+  }
+  res.json(invoices);
+});
+
+router.post('/dining-invoices', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: '未收到文件' });
+  }
+
+  const settings = await getSettings();
+  const originalName = resolveUploadOriginalName(
+    req.file.originalname,
+    req.body.originalFilename
+  );
+
+  const invoiceExtract = await extractInvoiceAmount(req.file.buffer, originalName, 'dining');
+  const invoice = await saveDiningInvoiceToRepository(
+    settings.baseDirectory,
+    originalName,
+    req.file.buffer,
+    {
+      extractedAmount: invoiceExtract.amount,
+      amountExtractNote: invoiceExtract.note,
+      invoiceDate: invoiceExtract.invoiceDate,
+      dateExtractNote: invoiceExtract.dateNote,
+    }
+  );
+
+  const created = await addDiningInvoice(invoice);
+  res.status(201).json(created);
+});
+
+router.put('/dining-invoices/:id', async (req, res) => {
+  const id = paramId(req.params);
+  const invoice = await getDiningInvoice(id);
+  if (!invoice) {
+    return res.status(404).json({ error: '餐饮发票不存在' });
+  }
+
+  const { invoiceDate, extractedAmount, status } = req.body as {
+    invoiceDate?: string | null;
+    extractedAmount?: number | null;
+    status?: 'available' | 'used';
+  };
+
+  const updated: typeof invoice = { ...invoice };
+
+  if (invoiceDate !== undefined) {
+    if (invoiceDate === null || invoiceDate === '') {
+      updated.invoiceDate = null;
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) {
+      return res.status(400).json({ error: '开票日期格式应为 YYYY-MM-DD' });
+    } else {
+      updated.invoiceDate = invoiceDate;
+    }
+  }
+
+  if (extractedAmount !== undefined) {
+    if (extractedAmount === null) {
+      updated.extractedAmount = null;
+    } else if (typeof extractedAmount !== 'number' || extractedAmount <= 0) {
+      return res.status(400).json({ error: '请填写有效的金额' });
+    } else {
+      updated.extractedAmount = Math.round(extractedAmount * 100) / 100;
+    }
+  }
+
+  if (status !== undefined) {
+    if (status !== 'available' && status !== 'used') {
+      return res.status(400).json({ error: '无效的状态' });
+    }
+    updated.status = status;
+    if (status === 'available') {
+      delete updated.assignedReimbursementId;
+      delete updated.assignedAt;
+    }
+  }
+
+  const result = await updateDiningInvoice(updated);
+  res.json(result);
+});
+
+router.get('/dining-invoices/:id/file', async (req, res) => {
+  const invoice = await getDiningInvoice(paramId(req.params));
+  if (!invoice) {
+    return res.status(404).json({ error: '餐饮发票不存在' });
+  }
+
+  const settings = await getSettings();
+  try {
+    const fullPath = getDiningInvoiceFilePath(settings.baseDirectory, invoice);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename*=UTF-8''${encodeURIComponent(invoice.originalName)}`
+    );
+    res.sendFile(fullPath, (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ error: '文件不存在' });
+      }
+    });
+  } catch {
+    res.status(400).json({ error: '无效的文件路径' });
+  }
+});
+
+router.delete('/dining-invoices/:id', async (req, res) => {
+  const id = paramId(req.params);
+  const invoice = await getDiningInvoice(id);
+  if (!invoice) {
+    return res.status(404).json({ error: '餐饮发票不存在' });
+  }
+  if (invoice.status === 'used') {
+    return res.status(400).json({ error: '该发票已用于报销，无法删除' });
+  }
+
+  const settings = await getSettings();
+  try {
+    await deleteDiningInvoiceFile(settings.baseDirectory, invoice);
+    await deleteDiningInvoice(id);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: '删除失败', detail: String(err) });
+  }
+});
+
+router.post('/dining-invoices/open-folder', async (_req, res) => {
+  const settings = await getSettings();
+  try {
+    await openFolder(buildDiningInvoiceRepoPath(settings.baseDirectory));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: '无法打开文件夹', detail: String(err) });
+  }
+});
+
+router.post('/reimbursements/:id/dining-invoices/match', async (req, res) => {
+  const reimbursement = await getReimbursement(paramId(req.params));
+  if (!reimbursement) {
+    return res.status(404).json({ error: '报销记录不存在' });
+  }
+
+  const { targetAmount } = req.body as { targetAmount?: number };
+  if (typeof targetAmount !== 'number' || targetAmount <= 0) {
+    return res.status(400).json({ error: '请填写有效的目标金额' });
+  }
+
+  const allInvoices = await getDiningInvoices();
+  const match = matchDiningInvoices(allInvoices, targetAmount, {
+    startDate: reimbursement.startDate,
+    endDate: reimbursement.endDate,
+  });
+  if (!match) {
+    return res.json({
+      targetAmount,
+      total: 0,
+      isExact: false,
+      invoices: [],
+    });
+  }
+
+  const invoices = match.ids
+    .map((id) => allInvoices.find((inv) => inv.id === id))
+    .filter((inv): inv is NonNullable<typeof inv> => inv != null);
+
+  res.json({
+    targetAmount,
+    total: match.total,
+    isExact: match.isExact,
+    invoices,
+  });
+});
+
+router.get('/reimbursements/:id/dining-invoices/suggest-amount', async (req, res) => {
+  const reimbursement = await getReimbursement(paramId(req.params));
+  if (!reimbursement) {
+    return res.status(404).json({ error: '报销记录不存在' });
+  }
+
+  const template = await getTemplate(reimbursement.templateId);
+  if (!template) {
+    return res.status(400).json({ error: '模板不存在' });
+  }
+
+  if (!reimbursement.startDate || !reimbursement.endDate) {
+    return res.json({ suggestedAmount: null, dailyTotal: getDailyDiningTotal(template.dining) });
+  }
+
+  const start = new Date(reimbursement.startDate);
+  const end = new Date(reimbursement.endDate);
+  const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const dailyTotal = getDailyDiningTotal(template.dining);
+
+  res.json({
+    suggestedAmount: days * dailyTotal,
+    days,
+    dailyTotal,
+  });
+});
+
+router.post('/reimbursements/:id/dining-invoices/attach', async (req, res) => {
+  const reimbursement = await getReimbursement(paramId(req.params));
+  if (!reimbursement) {
+    return res.status(404).json({ error: '报销记录不存在' });
+  }
+
+  const { invoiceIds } = req.body as { invoiceIds?: string[] };
+  if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+    return res.status(400).json({ error: '请选择要导入的发票' });
+  }
+
+  const settings = await getSettings();
+  const attachedFiles = [];
+
+  for (const invoiceId of invoiceIds) {
+    const invoice = await getDiningInvoice(invoiceId);
+    if (!invoice) {
+      return res.status(404).json({ error: `餐饮发票不存在: ${invoiceId}` });
+    }
+    if (invoice.status !== 'available') {
+      return res.status(400).json({ error: `发票已被使用: ${invoice.originalName}` });
+    }
+
+    const { fileRecord, updatedInvoice } = await attachDiningInvoiceToReimbursement(
+      reimbursement,
+      invoice,
+      settings.baseDirectory
+    );
+    reimbursement.files.push(fileRecord);
+    await updateDiningInvoice(updatedInvoice);
+    attachedFiles.push(fileRecord);
+  }
+
+  await updateReimbursement(reimbursement);
+  res.status(201).json({ files: attachedFiles, reimbursement });
 });

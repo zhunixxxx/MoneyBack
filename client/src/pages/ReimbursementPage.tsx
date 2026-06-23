@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
+import { DiningInvoiceMatchModal } from '../components/DiningInvoiceMatchModal';
 import { DropZone } from '../components/DropZone';
 import { ExportPreviewModal } from '../components/ExportPreviewModal';
 import { LocationTags } from '../components/LocationTags';
@@ -16,6 +17,7 @@ export function ReimbursementPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [exportPreviewOpen, setExportPreviewOpen] = useState(false);
   const [exportPreview, setExportPreview] = useState<ExportPreview | null>(null);
+  const [diningMatchOpen, setDiningMatchOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -160,6 +162,7 @@ export function ReimbursementPage() {
           const recognizedCount = isInvoice
             ? zoneFiles.filter((f) => f.extractedAmount != null).length
             : 0;
+          const isDiningInvoice = zone.category === 'dining' && zone.subType === 'invoice';
 
           return (
             <DropZone
@@ -173,6 +176,17 @@ export function ReimbursementPage() {
               onDelete={handleDeleteFile}
               getFileViewUrl={(fileId) => api.getFileViewUrl(id!, fileId)}
               showAmount={isInvoice || (zone.category === 'accommodation' && zone.subType === 'receipt')}
+              headerExtra={
+                isDiningInvoice ? (
+                  <button
+                    type="button"
+                    onClick={() => setDiningMatchOpen(true)}
+                    className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                  >
+                    从发票库匹配
+                  </button>
+                ) : undefined
+              }
               footer={
                 isInvoice && zoneFiles.length > 0 ? (
                   <div className="mt-3 rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-600">
@@ -198,6 +212,15 @@ export function ReimbursementPage() {
         }}
         onConfirm={handleConfirmExport}
       />
+
+      {id && (
+        <DiningInvoiceMatchModal
+          open={diningMatchOpen}
+          reimbursementId={id}
+          onClose={() => setDiningMatchOpen(false)}
+          onAttached={load}
+        />
+      )}
     </div>
   );
 }

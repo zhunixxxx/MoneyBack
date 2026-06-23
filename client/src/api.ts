@@ -1,5 +1,8 @@
 import type {
   AppSettings,
+  DiningInvoice,
+  DiningInvoiceMatchResult,
+  DiningSuggestAmount,
   ExportPreview,
   FileCategory,
   FileSubType,
@@ -112,4 +115,53 @@ export const api = {
     request<Reimbursement>(`/reimbursements/${id}/export`, { method: 'POST' }),
   getExportPreview: (id: string) =>
     request<ExportPreview>(`/reimbursements/${id}/export/preview`),
+
+  getDiningInvoices: (status?: 'available' | 'used') => {
+    const query = status ? `?status=${status}` : '';
+    return request<DiningInvoice[]>(`/dining-invoices${query}`);
+  },
+  uploadDiningInvoice: (file: File): Promise<DiningInvoice> => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    form.append('originalFilename', file.name);
+    return request<DiningInvoice>('/dining-invoices', {
+      method: 'POST',
+      body: form,
+    });
+  },
+  updateDiningInvoice: (
+    id: string,
+    data: {
+      invoiceDate?: string | null;
+      extractedAmount?: number | null;
+      status?: 'available' | 'used';
+    }
+  ) =>
+    request<DiningInvoice>(`/dining-invoices/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  deleteDiningInvoice: (id: string) =>
+    request<void>(`/dining-invoices/${id}`, { method: 'DELETE' }),
+  getDiningInvoiceViewUrl: (id: string) => `/api/dining-invoices/${id}/file`,
+  openDiningInvoiceFolder: () =>
+    request<{ ok: boolean }>('/dining-invoices/open-folder', { method: 'POST' }),
+  matchDiningInvoices: (reimbursementId: string, targetAmount: number) =>
+    request<DiningInvoiceMatchResult>(`/reimbursements/${reimbursementId}/dining-invoices/match`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetAmount }),
+    }),
+  suggestDiningAmount: (reimbursementId: string) =>
+    request<DiningSuggestAmount>(`/reimbursements/${reimbursementId}/dining-invoices/suggest-amount`),
+  attachDiningInvoices: (reimbursementId: string, invoiceIds: string[]) =>
+    request<{ files: ReimbursementFile[]; reimbursement: Reimbursement }>(
+      `/reimbursements/${reimbursementId}/dining-invoices/attach`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceIds }),
+      }
+    ),
 };

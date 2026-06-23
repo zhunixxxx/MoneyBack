@@ -12,6 +12,7 @@ interface DropZoneProps {
   onDelete?: (fileId: string) => Promise<void>;
   getFileViewUrl?: (fileId: string) => string;
   showAmount?: boolean;
+  headerExtra?: React.ReactNode;
   footer?: React.ReactNode;
 }
 
@@ -29,6 +30,7 @@ export function DropZone({
   onDelete,
   getFileViewUrl,
   showAmount = false,
+  headerExtra,
   footer,
 }: DropZoneProps) {
   const [dragging, setDragging] = useState(false);
@@ -74,11 +76,14 @@ export function DropZone({
     <div className="rounded-xl border border-stone-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-medium text-stone-900">{label}</h3>
-        {files.length > 0 && (
-          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
-            {files.length} 个文件
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {headerExtra}
+          {files.length > 0 && (
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
+              {files.length} 个文件
+            </span>
+          )}
+        </div>
       </div>
 
       <div
@@ -97,6 +102,7 @@ export function DropZone({
           const input = document.createElement('input');
           input.type = 'file';
           input.multiple = true;
+          input.accept = '.pdf,.png,.jpg,.jpeg,.webp,.bmp,.gif';
           input.onchange = () => handleFiles(input.files);
           input.click();
         }}
@@ -105,7 +111,7 @@ export function DropZone({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
         </svg>
         <p className="text-sm text-stone-600">
-          {uploading ? '正在上传并识别金额…' : '拖拽文件到此处，或点击选择'}
+          {uploading ? '正在上传并 OCR 识别…' : '拖拽文件到此处，或点击选择'}
         </p>
         <p className="mt-1 text-xs text-stone-400">{hint}</p>
       </div>

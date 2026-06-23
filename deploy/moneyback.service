@@ -1,0 +1,17 @@
+[Unit]
+Description=MoneyBack 出差报销整理工具
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%PROJECT_DIR%
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5
+Environment=HOME=%HOME%
+Environment=PORT=3456
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target

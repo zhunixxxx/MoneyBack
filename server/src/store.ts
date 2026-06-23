@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import type { AppData, AppSettings, Reimbursement, ReimbursementTemplate } from './types.js';
+import type { AppData, AppSettings, DiningInvoice, Reimbursement, ReimbursementTemplate } from './types.js';
 import { createDefaultTemplate } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -21,7 +21,12 @@ async function loadData(): Promise<AppData> {
   await ensureDataDir();
   try {
     const raw = await fs.readFile(DATA_FILE, 'utf-8');
-    return JSON.parse(raw) as AppData;
+    const data = JSON.parse(raw) as AppData;
+    if (!data.diningInvoices) {
+      data.diningInvoices = [];
+      await saveData(data);
+    }
+    return data;
   } catch {
     const now = new Date().toISOString();
     const defaultTemplate: ReimbursementTemplate = {
@@ -34,6 +39,7 @@ async function loadData(): Promise<AppData> {
       settings: DEFAULT_SETTINGS,
       templates: [defaultTemplate],
       reimbursements: [],
+      diningInvoices: [],
     };
     await saveData(data);
     return data;
@@ -141,6 +147,43 @@ export async function deleteReimbursement(id: string): Promise<boolean> {
   const index = data.reimbursements.findIndex((r) => r.id === id);
   if (index === -1) return false;
   data.reimbursements.splice(index, 1);
+  await saveData(data);
+  return true;
+}
+
+export async function getDiningInvoices(): Promise<DiningInvoice[]> {
+  const data = await loadData();
+  return data.diningInvoices.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+export async function getDiningInvoice(id: string): Promise<DiningInvoice | undefined> {
+  const data = await loadData();
+  return data.diningInvoices.find((inv) => inv.id === id);
+}
+
+export async function addDiningInvoice(invoice: DiningInvoice): Promise<DiningInvoice> {
+  const data = await loadData();
+  data.diningInvoices.push(invoice);
+  await saveData(data);
+  return invoice;
+}
+
+export async function updateDiningInvoice(invoice: DiningInvoice): Promise<DiningInvoice> {
+  const data = await loadData();
+  const index = data.diningInvoices.findIndex((inv) => inv.id === invoice.id);
+  if (index === -1) throw new Error('餐饮发票不存在');
+  data.diningInvoices[index] = invoice;
+  await saveData(data);
+  return invoice;
+}
+
+export async function deleteDiningInvoice(id: string): Promise<boolean> {
+  const data = await loadData();
+  const index = data.diningInvoices.findIndex((inv) => inv.id === id);
+  if (index === -1) return false;
+  data.diningInvoices.splice(index, 1);
   await saveData(data);
   return true;
 }

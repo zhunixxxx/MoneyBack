@@ -76,10 +76,35 @@ export interface AppSettings {
   baseDirectory: string;
 }
 
+export type DiningInvoiceStatus = 'available' | 'used';
+
+export interface DiningInvoice {
+  id: string;
+  originalName: string;
+  savedName: string;
+  relativePath: string;
+  extractedAmount: number | null;
+  amountExtractNote?: string;
+  invoiceDate?: string | null;
+  dateExtractNote?: string;
+  status: DiningInvoiceStatus;
+  assignedReimbursementId?: string;
+  assignedAt?: string;
+  createdAt: string;
+}
+
+export interface DiningInvoiceMatchResult {
+  targetAmount: number;
+  total: number;
+  isExact: boolean;
+  invoices: DiningInvoice[];
+}
+
 export interface AppData {
   settings: AppSettings;
   templates: ReimbursementTemplate[];
   reimbursements: Reimbursement[];
+  diningInvoices: DiningInvoice[];
 }
 
 export const CATEGORY_LABELS: Record<FileCategory, string> = {

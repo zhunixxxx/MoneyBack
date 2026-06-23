@@ -108,6 +108,41 @@ export interface AppSettings {
   baseDirectory: string;
 }
 
+export type DiningInvoiceStatus = 'available' | 'used';
+
+export const DINING_INVOICE_STATUS_LABELS: Record<DiningInvoiceStatus, string> = {
+  available: '可用',
+  used: '已使用',
+};
+
+export interface DiningInvoice {
+  id: string;
+  originalName: string;
+  savedName: string;
+  relativePath: string;
+  extractedAmount: number | null;
+  amountExtractNote?: string;
+  invoiceDate?: string | null;
+  dateExtractNote?: string;
+  status: DiningInvoiceStatus;
+  assignedReimbursementId?: string;
+  assignedAt?: string;
+  createdAt: string;
+}
+
+export interface DiningInvoiceMatchResult {
+  targetAmount: number;
+  total: number;
+  isExact: boolean;
+  invoices: DiningInvoice[];
+}
+
+export interface DiningSuggestAmount {
+  suggestedAmount: number | null;
+  days?: number;
+  dailyTotal: number;
+}
+
 export const CATEGORY_LABELS: Record<FileCategory, string> = {
   transport_rail: '高铁',
   transport_taxi: '打车',

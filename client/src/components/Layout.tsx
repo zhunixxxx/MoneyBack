@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 const NAV = [
   { to: '/', label: '报销列表' },
+  { to: '/dining-invoices', label: '发票库' },
   { to: '/templates', label: '报销模板' },
   { to: '/settings', label: '设置' },
 ];
@@ -24,11 +25,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Link
                   key={to}
                   to={to}
-                  className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                    active
+                  className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${active
                       ? 'bg-stone-900 text-white'
                       : 'text-stone-600 hover:bg-stone-100'
-                  }`}
+                    }`}
                 >
                   {label}
                 </Link>
