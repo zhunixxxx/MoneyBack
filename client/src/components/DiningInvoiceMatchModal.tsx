@@ -24,6 +24,7 @@ export function DiningInvoiceMatchModal({
   const [targetAmount, setTargetAmount] = useState('');
   const [suggest, setSuggest] = useState<DiningSuggestAmount | null>(null);
   const [matchResult, setMatchResult] = useState<{
+    targetAmount: number;
     total: number;
     isExact: boolean;
     invoices: DiningInvoice[];
@@ -61,6 +62,7 @@ export function DiningInvoiceMatchModal({
     try {
       const result = await api.matchDiningInvoices(reimbursementId, amount);
       setMatchResult({
+        targetAmount: result.targetAmount,
         total: result.total,
         isExact: result.isExact,
         invoices: result.invoices,
@@ -152,7 +154,9 @@ export function DiningInvoiceMatchModal({
               <div className="rounded-xl border border-stone-200">
                 <div className="border-b border-stone-200 px-4 py-3">
                   {matchResult.invoices.length === 0 ? (
-                    <p className="text-sm text-stone-500">没有可用的餐饮发票，请先到发票库上传</p>
+                    <p className="text-sm text-stone-500">
+                      没有合计达到 ¥{formatAmount(matchResult.targetAmount)} 的发票组合，请补充发票或调整目标金额
+                    </p>
                   ) : (
                     <p className="text-sm text-stone-600">
                       匹配 {matchResult.invoices.length} 张发票，合计{' '}
@@ -162,7 +166,9 @@ export function DiningInvoiceMatchModal({
                       {matchResult.isExact ? (
                         <span className="ml-2 text-emerald-700">（精确匹配）</span>
                       ) : (
-                        <span className="ml-2 text-amber-700">（最接近目标金额）</span>
+                        <span className="ml-2 text-amber-700">
+                          （超出目标 ¥{formatAmount(matchResult.total - matchResult.targetAmount)}）
+                        </span>
                       )}
                     </p>
                   )}

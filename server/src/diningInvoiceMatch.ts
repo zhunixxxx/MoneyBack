@@ -32,49 +32,31 @@ export function findBestInvoiceCombination(
 
   if (items.length === 0) return null;
 
-  const maxItem = Math.max(...items.map((i) => i.cents));
-  const cap = Math.max(target, maxItem);
-  const dp: (string[] | null)[] = Array(cap + 1).fill(null);
+  const totalCap = items.reduce((sum, item) => sum + item.cents, 0);
+  if (totalCap < target) return null;
+
+  const dp: (string[] | null)[] = Array(totalCap + 1).fill(null);
   dp[0] = [];
 
   for (const item of items) {
-    for (let sum = cap; sum >= item.cents; sum--) {
+    for (let sum = totalCap; sum >= item.cents; sum--) {
       if (dp[sum - item.cents] !== null && dp[sum] === null) {
         dp[sum] = [...dp[sum - item.cents]!, item.id];
       }
     }
   }
 
-  if (dp[target]) {
-    return {
-      ids: dp[target]!,
-      total: roundAmount(target / 100),
-      isExact: true,
-    };
-  }
-
-  for (let sum = target - 1; sum >= 0; sum--) {
+  for (let sum = target; sum <= totalCap; sum++) {
     if (dp[sum]) {
       return {
         ids: dp[sum]!,
         total: roundAmount(sum / 100),
-        isExact: false,
+        isExact: sum === target,
       };
     }
   }
 
-  let bestSingle = items[0];
-  for (const item of items) {
-    if (Math.abs(item.cents - target) < Math.abs(bestSingle.cents - target)) {
-      bestSingle = item;
-    }
-  }
-
-  return {
-    ids: [bestSingle.id],
-    total: roundAmount(bestSingle.cents / 100),
-    isExact: bestSingle.cents === target,
-  };
+  return null;
 }
 
 export function matchDiningInvoices(

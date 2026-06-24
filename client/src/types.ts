@@ -53,6 +53,7 @@ export interface ReimbursementFile {
   amountExtractNote?: string;
   extractedCheckInDate?: string | null;
   exportedName?: string;
+  sourceDiningInvoiceId?: string;
 }
 
 export interface Reimbursement {

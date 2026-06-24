@@ -126,6 +126,8 @@ export async function attachDiningInvoiceToReimbursement(
     }
   );
 
+  fileRecord.sourceDiningInvoiceId = invoice.id;
+
   const updatedInvoice: DiningInvoice = {
     ...invoice,
     status: 'used',
@@ -134,4 +136,42 @@ export async function attachDiningInvoiceToReimbursement(
   };
 
   return { fileRecord, updatedInvoice };
+}
+
+export async function releaseDiningInvoiceFromReimbursement(
+  reimbursement: Reimbursement,
+  file: ReimbursementFile,
+  getInvoice: (id: string) => Promise<DiningInvoice | undefined>,
+  getInvoices: () => Promise<DiningInvoice[]>,
+  updateInvoice: (invoice: DiningInvoice) => Promise<DiningInvoice>
+): Promise<void> {
+  if (file.category !== 'dining' || file.subType !== 'invoice') return;
+
+  let invoice: DiningInvoice | undefined;
+
+  if (file.sourceDiningInvoiceId) {
+    invoice = await getInvoice(file.sourceDiningInvoiceId);
+  } else {
+    const all = await getInvoices();
+    invoice = all.find(
+      (inv) =>
+        inv.status === 'used' &&
+        inv.assignedReimbursementId === reimbursement.id &&
+        inv.originalName === file.originalName
+    );
+  }
+
+  if (!invoice || invoice.status !== 'used') return;
+  if (invoice.assignedReimbursementId && invoice.assignedReimbursementId !== reimbursement.id) {
+    return;
+  }
+
+  const restored: DiningInvoice = {
+    ...invoice,
+    status: 'available',
+  };
+  delete restored.assignedReimbursementId;
+  delete restored.assignedAt;
+
+  await updateInvoice(restored);
 }

@@ -37,6 +37,7 @@ import {
   buildDiningInvoiceRepoPath,
   deleteDiningInvoiceFile,
   getDiningInvoiceFilePath,
+  releaseDiningInvoiceFromReimbursement,
   saveDiningInvoiceToRepository,
 } from './diningInvoices.js';
 import { matchDiningInvoices } from './diningInvoiceMatch.js';
@@ -362,7 +363,16 @@ router.delete('/reimbursements/:id/files/:fileId', async (req, res) => {
     return res.status(404).json({ error: '文件不存在' });
   }
 
+  const file = reimbursement.files[index];
+
   try {
+    await releaseDiningInvoiceFromReimbursement(
+      reimbursement,
+      file,
+      getDiningInvoice,
+      getDiningInvoices,
+      updateDiningInvoice
+    );
     await deleteFileFromReimbursement(reimbursement, fileId);
     reimbursement.files.splice(index, 1);
     await updateReimbursement(reimbursement);
